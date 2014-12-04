@@ -1,79 +1,65 @@
 package poke
 
 import (
+	"encoding/json"
 	"log"
 	"net"
 	"os"
 	"time"
 )
 
-const Version = "0.0.1"
-
-type action func(*Poke) *Result
-type actionChain []action
-
-type Result struct {
-	Name      string
-	Initiated time.Time
-	Completed time.Time
-	Result    string
-	Err       error
-}
-
-type resultChain []*Result
+const Version = "0.0.2"
 
 type Poke struct {
 	Timestamp   time.Time
 	Target      string
+	Port        string
 	Host        string
 	Version     string
 	*log.Logger `json:"-"`
-	actions     actionChain `json:"-"`
-	Results     resultChain `json:"Latency"`
+	actions     []action  `json:"-"`
+	Results     []*Result `json:"Latency"`
 }
 
 func NewPoke(target string) *Poke {
-	var host, err = os.Hostname()
-	if err == nil {
+	host, err := os.Hostname()
+	if err != nil {
 		host = "Unknown"
+	}
+
+	var port string
+	_, port, err = net.SplitHostPort(target)
+	if err != nil {
+		//Warn: We assume this means no port, but could be a malformed address
+		//Add default port of 80 if user did not specify one
+		port = "80"
 	}
 
 	return &Poke{
 		Timestamp: time.Now(),
 		Target:    target,
 		Host:      host,
+		Port:      port,
 		Version:   Version,
 		Logger:    log.New(os.Stderr, "", log.LstdFlags)}
 }
 
-func (p *Poke) Include(action action) {
+func (p *Poke) AddAction(action action) {
 	p.actions = append(p.actions, action)
 }
 
 func (p *Poke) Run() {
-	p.Results = make(resultChain, len(p.actions))
+	p.Results = make(results, len(p.actions))
 	for i, a := range p.actions {
 		p.Results[i] = a(p)
 	}
+	p.marshalToLog()
 }
 
-func DNSLookup(p *Poke) *Result {
-	r := &Result{}
-	r.Name = "DNS Lookup"
-	r.Initiated = time.Now()
-	rslt, err := net.LookupIP(p.Target)
-	r.Completed = time.Now()
+func (p *Poke) marshalToLog() {
+	rslt, err := json.MarshalIndent(p, "", "  ")
 	if err != nil {
-		r.Err = err
-	} else {
-		for _, s := range rslt {
-			bytes, merr := s.MarshalText()
-			if err != nil {
-				r.Err = merr
-			} else {
-				r.Result += string(bytes)
-			}
-		}
+		p.Fatalf("Marshal failed: %v", err.Error())
 	}
-	return r
+	p.Print(string(rslt))
 }

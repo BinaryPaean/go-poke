@@ -1,17 +1,19 @@
 package main
 
-import "encoding/json"
+import "os"
 import "github.com/binarypaean/go-poke/poke"
 
 func main() {
-	p := poke.NewPoke("www.google.com")
-	p.Include(poke.DNSLookup)
-	p.Run()
+	args := os.Args[1:]
+	pokes := make([]*poke.Poke, len(args))
 
-	var rslt []byte
-	rslt, err := json.MarshalIndent(p, "", "  ")
-	if err != nil {
-		p.Fatalf("Marshal failed: %v", err.Error())
+	for i, a := range args {
+		pokes[i] = poke.NewPoke(a)
 	}
-	p.Print(string(rslt))
+
+	for _, p := range pokes {
+		p.AddAction(poke.DNSLookup)
+		p.AddAction(poke.GetRequest)
+		p.Run()
+	}
 }
