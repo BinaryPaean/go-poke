@@ -3,7 +3,7 @@ package poke
 import (
 	"encoding/json"
 	"log"
-	"net"
+	"net/url"
 	"os"
 	"time"
 )
@@ -12,36 +12,34 @@ const Version = "0.0.2"
 
 type Poke struct {
 	Timestamp   time.Time
-	Target      string
-	Port        string
+	Target      *url.URL `json:"-"`
 	Host        string
 	Version     string
 	*log.Logger `json:"-"`
-	actions     []action  `json:"-"`
-	Results     []*Result `json:"Latency"`
+	actions     []action `json:"-"`
+	Results     []*Result
 }
 
-func NewPoke(target string) *Poke {
-	host, err := os.Hostname()
-	if err != nil {
-		host = "Unknown"
-	}
+func NewPoke(userTarget string) *Poke {
 
-	var port string
-	_, port, err = net.SplitHostPort(target)
-	if err != nil {
-		//Warn: We assume this means no port, but could be a malformed address
-		//Add default port of 80 if user did not specify one
-		port = "80"
-	}
-
-	return &Poke{
+	p := &Poke{
 		Timestamp: time.Now(),
-		Target:    target,
-		Host:      host,
-		Port:      port,
 		Version:   Version,
 		Logger:    log.New(os.Stderr, "", log.LstdFlags)}
+
+	var err error
+	p.Host, err = os.Hostname()
+	if err != nil {
+		p.Host = "Unknown"
+	}
+
+	p.Target, err = url.Parse(userTarget)
+	if err != nil {
+		p.Fatalf("Unable to parse URL from given path: %v", err)
+		os.Exit(1)
+	}
+
+	return p
 }
 
 func (p *Poke) AddAction(action action) {

@@ -3,14 +3,18 @@ package poke
 import (
 	"bufio"
 	"crypto/sha256"
-	"fmt"
 	"net"
+	"net/http"
 	"strings"
 	"time"
 )
 
 type action func(*Poke) *Result
-type metric func(*Poke, *Result) action
+type metric func(action) action
+
+func (a action) addMetric(m metric) action {
+	return m(a)
+}
 
 func timeAction(f action) action {
 	return func(p *Poke) *Result {
@@ -33,12 +37,10 @@ func contentHash(f action) action {
 }
 
 func dnsLookup(p *Poke) *Result {
-	r := NewResult()
-	r.Name = "DNS Lookup"
+	r := NewResult("DNS Lookup", p.Target.Host)
 
 	var resp []net.IP
-	resp, r.Err = net.LookupIP(p.Target)
-	if r.Err == nil {
+	if resp, r.Err = net.LookupIP(r.Target); r.Err == nil {
 		r.Response = make([]string, len(resp))
 		for i, p := range resp {
 			r.Response[i] = p.String()
@@ -47,28 +49,31 @@ func dnsLookup(p *Poke) *Result {
 	return r
 }
 
-func rootGetRequest(p *Poke) *Result {
-	r := NewResult()
-	r.Name = "HTTP GET"
-	conn, err := net.Dial("tcp", net.JoinHostPort(p.Target, p.Port))
-	if err != nil {
-		r.Err = err
-		return r
+func httpGet(p *Poke) *Result {
+	r := NewResult("HTTP GET", p.Target.String())
+
+	var err error
+	var resp *http.Response
+	if resp, err = http.Get(r.Target); err == nil {
+		defer resp.Body.Close()
+		r.Response = make([]string, 20) //Magic number alert!
+		scanner := bufio.NewScanner(resp.Body)
+		for scanner.Scan() {
+			r.Response = append(r.Response, scanner.Text())
+		}
+		err = scanner.Err()
 	}
 
-	fmt.Fprintf(conn, "GET / HTTP/1.1\r\nHost: %v\r\nConnection: close\r\n\r\n", p.Target)
-	response, err := bufio.NewReader(conn).ReadString('\n')
-	if err != nil {
-		r.Err = err
-	}
-	r.Response = []string{response}
+	r.Err = err
 	return r
 }
 
 func DNSLookup(p *Poke) *Result {
-	return contentHash(timeAction(dnsLookup))(p)
+	a := action(dnsLookup).addMetric(timeAction).addMetric(contentHash)
+	return a(p)
 }
 
 func GetRequest(p *Poke) *Result {
-	return contentHash(timeAction(rootGetRequest))(p)
+	a := action(httpGet).addMetric(timeAction).addMetric(contentHash)
+	return a(p)
 }
