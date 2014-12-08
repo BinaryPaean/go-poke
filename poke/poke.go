@@ -2,6 +2,7 @@ package poke
 
 import (
 	"encoding/json"
+	"fmt"
 	"log"
 	"net/url"
 	"os"
@@ -11,13 +12,14 @@ import (
 const Version = "0.0.2"
 
 type Poke struct {
-	Timestamp   time.Time
-	Target      *url.URL `json:"-"`
-	Host        string
-	Version     string
-	*log.Logger `json:"-"`
-	actions     []action `json:"-"`
-	Results     []*Result
+	Timestamp time.Time
+	Target    *url.URL `json:"-"`
+	Host      string
+	Version   string      `json:"GoPokeVersion"`
+	err       *log.Logger `json:"-"`
+	output    *os.File    `json:"-"`
+	actions   []action    `json:"-"`
+	Results   []*Result
 }
 
 func NewPoke(userTarget string) *Poke {
@@ -25,7 +27,8 @@ func NewPoke(userTarget string) *Poke {
 	p := &Poke{
 		Timestamp: time.Now(),
 		Version:   Version,
-		Logger:    log.New(os.Stderr, "", log.LstdFlags)}
+		err:       log.New(os.Stderr, "", log.LstdFlags),
+		output:    os.Stdout}
 
 	var err error
 	p.Host, err = os.Hostname()
@@ -35,7 +38,7 @@ func NewPoke(userTarget string) *Poke {
 
 	p.Target, err = url.Parse(userTarget)
 	if err != nil {
-		p.Fatalf("Unable to parse URL from given path: %v", err)
+		p.err.Fatalf("Unable to parse URL from: %v", err)
 		os.Exit(1)
 	}
 
@@ -57,7 +60,7 @@ func (p *Poke) Run() {
 func (p *Poke) marshalToLog() {
 	rslt, err := json.MarshalIndent(p, "", "  ")
 	if err != nil {
-		p.Fatalf("Marshal failed: %v", err.Error())
+		p.err.Fatalf("Marshal failed: %v", err.Error())
 	}
-	p.Print(string(rslt))
+	fmt.Fprintln(p.output, string(rslt))
 }

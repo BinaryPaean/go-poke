@@ -14,7 +14,7 @@ func main() {
 	//Here is where we should "actually" be catching comand line flags
 	// or configuration options to decide which actions and metrics to run.
 	//Current architectural plan is to use the same actions+metric set for all
-	//created Pokes. Invoke the program with different arguments for heterogenious
+	//created Pokes. Invoke the program with different arguments for heterogeneous
 	//action/metric sets.
 	for _, p := range pokes {
 		p.AddAction(poke.DNSLookup)

@@ -56,12 +56,12 @@ func httpGet(p *Poke) *Result {
 	var resp *http.Response
 	if resp, err = http.Get(r.Target); err == nil {
 		defer resp.Body.Close()
-		r.Response = make([]string, 20) //Magic number alert!
+		r.Response = make([]string, 20) //Magic number alert! Should have default
 		scanner := bufio.NewScanner(resp.Body)
 		for scanner.Scan() {
 			r.Response = append(r.Response, scanner.Text())
 		}
-		err = scanner.Err()
+		//err = scanner.Err()
 	}
 
 	r.Err = err
