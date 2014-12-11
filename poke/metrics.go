@@ -3,6 +3,8 @@ package poke
 import (
 	"bufio"
 	"crypto/sha256"
+	"fmt"
+	"github.com/shenwei356/util/bytesize"
 	"net"
 	"net/http"
 	"strings"
@@ -26,12 +28,23 @@ func timeAction(f action) action {
 	}
 }
 
+func sizeInBytes(f action) action {
+	return func(p *Poke) *Result {
+		r := f(p)
+		r.Metrics["size"] = fmt.Sprintf("%v", bytesize.ByteSize(
+			len(
+				[]byte(
+					strings.Join(r.Response, "")))))
+		return r
+	}
+}
+
 func contentHash(f action) action {
 	return func(p *Poke) *Result {
 		r := f(p)
 
 		hash := sha256.Sum256([]byte(strings.Join(r.Response, "")))
-		r.Metrics["hash"] = hash[:]
+		r.Metrics["sha256"] = hash[:]
 		return r
 	}
 }
@@ -61,6 +74,8 @@ func httpGet(p *Poke) *Result {
 		for scanner.Scan() {
 			r.Response = append(r.Response, scanner.Text())
 		}
+		//This was creating an empty error, rather than nil which caused inconsistent
+		//output in the JSON. May have to handle unexpected EOF explicitly.
 		//err = scanner.Err()
 	}
 
@@ -69,11 +84,11 @@ func httpGet(p *Poke) *Result {
 }
 
 func DNSLookup(p *Poke) *Result {
-	a := action(dnsLookup).addMetric(timeAction).addMetric(contentHash)
+	a := action(dnsLookup).addMetric(timeAction).addMetric(contentHash).addMetric(sizeInBytes)
 	return a(p)
 }
 
 func GetRequest(p *Poke) *Result {
-	a := action(httpGet).addMetric(timeAction).addMetric(contentHash)
+	a := action(httpGet).addMetric(timeAction).addMetric(contentHash).addMetric(sizeInBytes)
 	return a(p)
 }
